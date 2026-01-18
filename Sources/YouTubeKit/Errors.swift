@@ -7,7 +7,7 @@
 
 import Foundation
 
-public enum YouTubeKitError: String, Error {
+public enum YouTubeKitError: Error {
     case maxRetriesExceeded
     case htmlParseError
     case extractError
@@ -19,6 +19,7 @@ public enum YouTubeKitError: String, Error {
     case recordingUnavailable
     case membersOnly
     case videoRegionBlocked
+  case remoteError(String)
 }
 
 extension YouTubeKitError: LocalizedError {
@@ -39,6 +40,9 @@ extension YouTubeKitError: LocalizedError {
 
         case .membersOnly:
             return NSLocalizedString("Video is members only", comment: "")
+
+    case .remoteError(let message):
+      return NSLocalizedString("Remote error: \(message)", comment: "")
 
         default: return nil
         }

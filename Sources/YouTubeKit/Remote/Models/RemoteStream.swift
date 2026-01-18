@@ -7,7 +7,7 @@
 
 import Foundation
 
-struct RemoteStream: Decodable {
+public struct RemoteStream: Decodable, Sendable {
     let url: URL
     let itag: Int
     let ext: String

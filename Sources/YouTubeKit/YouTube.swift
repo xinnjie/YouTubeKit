@@ -7,6 +7,11 @@
 
 import Foundation
 @preconcurrency import os.log
+#if canImport(YTDLPAPI)
+  import YTDLPAPI
+  import GRPCCore
+  import GRPCNIOTransportHTTP2
+#endif
 
 @available(iOS 13.0, watchOS 6.0, tvOS 13.0, macOS 10.15, *)
 public class YouTube {
@@ -292,6 +297,29 @@ public class YouTube {
                     let remoteStreams = try await remoteClient.extractStreams(forVideoID: videoID)
                     
                     return remoteStreams.compactMap { try? Stream(remoteStream: $0) }
+                    
+        case .remoteReverseExecutor(let serverURL):
+          #if canImport(YTDLPAPI)
+            guard let host = serverURL.host, let port = serverURL.port else {
+              throw YouTubeKitError.remoteError(
+                "Invalid server URL for Reverse Executor (must include host and port)")
+            }
+            let secure = serverURL.scheme == "https"
+            if #available(macOS 15.0, iOS 18.0, watchOS 11.0, tvOS 18.0, visionOS 2.0, *) {
+              let transport = try HTTP2ClientTransport.Posix(
+                target: .dns(host: host, port: port),
+                transportSecurity: secure ? .tls : .plaintext
+              )
+              let grpcClient = GRPCClient(transport: transport)
+              let client = ReverseExecutorClient(grpcClient: grpcClient)
+              let remoteStreams = try await client.extract(videoID: videoID)
+              return remoteStreams.compactMap { try? Stream(remoteStream: $0) }
+            } else {
+              throw YouTubeKitError.remoteError("Reverse Executor requires newer OS versions")
+            }
+          #else
+            throw YouTubeKitError.remoteError(".remoteReverseExecutor not available")
+          #endif
                 }
             }
             

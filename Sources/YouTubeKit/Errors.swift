@@ -7,10 +7,11 @@
 
 import Foundation
 
-public enum YouTubeKitError: Error {
+public enum YouTubeKitError: Error, Equatable {
     case maxRetriesExceeded
     case htmlParseError
     case extractError
+  case extractTimeout
     case regexMatchError
     case videoUnavailable
     case videoAgeRestricted
@@ -34,6 +35,9 @@ extension YouTubeKitError: LocalizedError {
 
         case .liveStreamError:
             return NSLocalizedString("Can't extract video from livestream", comment: "")
+
+    case .extractTimeout:
+      return NSLocalizedString("Extract timed out", comment: "")
 
         case .videoPrivate:
             return NSLocalizedString("Video is private", comment: "")

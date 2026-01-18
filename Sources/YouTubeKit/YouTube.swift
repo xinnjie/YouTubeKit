@@ -311,6 +311,18 @@ public class YouTube {
                 transportSecurity: secure ? .tls : .plaintext
               )
               let grpcClient = GRPCClient(transport: transport)
+              let clientRun = Task {
+                do {
+                  try await grpcClient.runConnections()
+                } catch {
+                  os_log(
+                    "gRPC client.run failed: %{public}@", log: self.log, type: .error,
+                    String(describing: error))
+                }
+              }
+              defer {
+                clientRun.cancel()
+              }
               let client = ReverseExecutorClient(grpcClient: grpcClient)
               let remoteStreams = try await client.extract(videoID: videoID)
               return remoteStreams.compactMap { try? Stream(remoteStream: $0) }

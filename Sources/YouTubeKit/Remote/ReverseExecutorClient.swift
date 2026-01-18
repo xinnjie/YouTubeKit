@@ -7,6 +7,7 @@
 
 import Foundation
 import os.log
+
 #if canImport(YTDLPAPI)
   import YTDLPAPI
   import GRPCCore
@@ -14,10 +15,10 @@ import os.log
   import GRPCNIOTransportHTTP2
 
   @available(macOS 15.0, iOS 18.0, watchOS 11.0, tvOS 18.0, visionOS 2.0, *)
-  public struct ReverseExecutorClient<Transport: ClientTransport> {
+  public struct ReverseExecutorClient<Client: Ytdlp_V1_ReverseExecutor.ClientProtocol> {
 
     private let log = OSLog(category: "ReverseExecutorClient")
-    private let client: Ytdlp_V1_ReverseExecutor.Client<Transport>
+    private let client: Client
     private let deviceID: String
     private let userAgent: String
     private let outboundStream: AsyncStream<Ytdlp_V1_ClientMessage>
@@ -27,7 +28,7 @@ import os.log
     public let id: UUID
 
     public init(
-      grpcClient: GRPCClient<Transport>,
+      client: Client,
       deviceID: String = UUID().uuidString,
       userAgent: String =
         "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1"
@@ -35,16 +36,30 @@ import os.log
       self.id = UUID()
       self.deviceID = deviceID
       self.userAgent = userAgent
-      self.client = Ytdlp_V1_ReverseExecutor.Client(wrapping: grpcClient)
+      self.client = client
 
       let stream = AsyncStream<Ytdlp_V1_ClientMessage>.makeStream()
       self.outboundStream = stream.stream
       self.outboundContinuation = stream.continuation
     }
 
+    public init<Transport: ClientTransport>(
+      grpcClient: GRPCClient<Transport>,
+      deviceID: String = UUID().uuidString,
+      userAgent: String =
+        "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1"
+    ) where Client == Ytdlp_V1_ReverseExecutor.Client<Transport> {
+      self.init(
+        client: Ytdlp_V1_ReverseExecutor.Client(wrapping: grpcClient),
+        deviceID: deviceID,
+        userAgent: userAgent
+      )
+    }
+
     /// Connects to the server, requests streams for the video, processes requests, and returns the result.
     /// This is an ephemeral operation: it connects, does the work, and disconnects.
-    public func extract(videoID: String) async throws -> [RemoteStream] {
+    public func extract(videoID: String, timeout: TimeInterval = 15) async throws -> [RemoteStream]
+    {
       let loopTask = Task {
         try await self.startLoop()
       }
@@ -54,31 +69,46 @@ import os.log
       }
 
       let taskID = UUID().uuidString
+      let timeoutTask = Task {
+        guard timeout > 0 else { return }
+        let duration = UInt64(timeout * 1_000_000_000)
+        do {
+          try await Task.sleep(nanoseconds: duration)
+        } catch {
+          return
+        }
+
+        if let continuation = await self.continuationStore.take(for: taskID) {
+          continuation.resume(throwing: YouTubeKitError.extractTimeout)
+        }
+      }
+      defer {
+        timeoutTask.cancel()
+      }
 
       return try await withCheckedThrowingContinuation { continuation in
         Task {
           await self.continuationStore.insert(continuation, for: taskID)
+          
+          let hello = Ytdlp_V1_Hello.with {
+            $0.deviceID = self.deviceID
+            // $0.userAgent = self.userAgent
+            // $0.cookies = ... // TODO: Inject cookies if needed
+            $0.capabilities = ["http_chunking": "true"]
+          }
+          self.sendMessage(Ytdlp_V1_ClientMessage.with { $0.hello = hello })
 
           let taskReq = Ytdlp_V1_TaskRequest.with {
             $0.taskID = taskID
             $0.url = "https://www.youtube.com/watch?v=\(videoID)"
             $0.options = ["quiet": "true", "no_warnings": "true", "skip_download": "true"]
           }
-
           self.sendMessage(Ytdlp_V1_ClientMessage.with { $0.taskRequest = taskReq })
         }
       }
     }
 
     private func startLoop() async throws {
-      let hello = Ytdlp_V1_Hello.with {
-        $0.deviceID = self.deviceID
-        $0.userAgent = self.userAgent
-        // $0.cookies = ... // TODO: Inject cookies if needed
-        $0.capabilities = ["http_chunking": "true"]
-      }
-      self.sendMessage(Ytdlp_V1_ClientMessage.with { $0.hello = hello })
-
       try await client.taskStream(
         requestProducer: { writer in
           for await message in outboundStream {
@@ -89,13 +119,15 @@ import os.log
           for try await message in response.messages {
             switch message.payload {
             case .request(let req):
-              Task {
-                await self.handleRequest(req)
-              }
+              os_log("Received request", log: self.log, type: .debug)
+              await self.handleRequest(req)
             case .extractResult(let result):
               await self.notifyResult(result)
+              return
             case .taskAccepted(let accepted):
-              os_log("Task accepted: %{public}@", log: self.log, type: .info, accepted.message)
+              os_log(
+                "Remote executor task accepted, message: %{public}@", log: self.log, type: .debug,
+                accepted.message)
             case .error(let error):
               os_log("Server error: %{public}@", log: self.log, type: .error, error.message)
               await self.notifyError(error)
@@ -164,7 +196,8 @@ import os.log
 
       } catch {
         os_log(
-          "HTTP request failed: %{public}@", log: self.log, type: .error, error.localizedDescription)
+          "HTTP request failed: %{public}@", log: self.log, type: .error, error.localizedDescription
+        )
         let err = Ytdlp_V1_Error.with {
           $0.requestID = req.requestID
           $0.code = "HTTP_ERROR"

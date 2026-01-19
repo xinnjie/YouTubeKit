@@ -60,8 +60,9 @@ import os.log
     /// This is an ephemeral operation: it connects, does the work, and disconnects.
     public func extract(videoID: String, timeout: TimeInterval = 15) async throws -> [RemoteStream]
     {
+      let callTimeout: Duration? = timeout > 0 ? .seconds(timeout) : nil
       let loopTask = Task {
-        try await self.startLoop()
+        await self.startLoop(timeout: callTimeout)
       }
       defer {
         outboundContinuation.finish()
@@ -69,22 +70,6 @@ import os.log
       }
 
       let taskID = UUID().uuidString
-      let timeoutTask = Task {
-        guard timeout > 0 else { return }
-        let duration = UInt64(timeout * 1_000_000_000)
-        do {
-          try await Task.sleep(nanoseconds: duration)
-        } catch {
-          return
-        }
-
-        if let continuation = await self.continuationStore.take(for: taskID) {
-          continuation.resume(throwing: YouTubeKitError.extractTimeout)
-        }
-      }
-      defer {
-        timeoutTask.cancel()
-      }
 
       return try await withCheckedThrowingContinuation { continuation in
         Task {
@@ -108,40 +93,48 @@ import os.log
       }
     }
 
-    private func startLoop() async throws {
-      try await client.taskStream(
-        requestProducer: { writer in
-          for await message in outboundStream {
-            try await writer.write(message)
-          }
-        },
-        onResponse: { response in
-          for try await message in response.messages {
-            switch message.payload {
-            case .request(let req):
-              os_log("Received request", log: self.log, type: .debug)
-              await self.handleRequest(req)
-            case .extractResult(let result):
-              await self.notifyResult(result)
-              return
-            case .taskAccepted(let accepted):
-              os_log(
-                "Remote executor task accepted, message: %{public}@", log: self.log, type: .debug,
-                accepted.message)
-            case .error(let error):
-              os_log("Server error: %{public}@", log: self.log, type: .error, error.message)
-              await self.notifyError(error)
-            case .ping(let ping):
-              let pong = Ytdlp_V1_Pong.with { $0.nonce = ping.nonce }
-              self.sendMessage(Ytdlp_V1_ClientMessage.with { $0.pong = pong })
-            case .cancel:
-              break
-            case .none:
-              break
+    private func startLoop(timeout: Duration?) async {
+      var options = CallOptions.defaults
+      options.timeout = timeout
+
+      do {
+        try await client.taskStream(
+          options: options,
+          requestProducer: { writer in
+            for await message in outboundStream {
+              try await writer.write(message)
+            }
+          },
+          onResponse: { response in
+            for try await message in response.messages {
+              switch message.payload {
+              case .request(let req):
+                os_log("Received request", log: self.log, type: .debug)
+                await self.handleRequest(req)
+              case .extractResult(let result):
+                await self.notifyResult(result)
+                return
+              case .taskAccepted(let accepted):
+                os_log(
+                  "Remote executor task accepted, message: %{public}@", log: self.log, type: .debug,
+                  accepted.message)
+              case .error(let error):
+                os_log("Server error: %{public}@", log: self.log, type: .error, error.message)
+                await self.notifyError(error)
+              case .ping(let ping):
+                let pong = Ytdlp_V1_Pong.with { $0.nonce = ping.nonce }
+                self.sendMessage(Ytdlp_V1_ClientMessage.with { $0.pong = pong })
+              case .cancel:
+                break
+              case .none:
+                break
+              }
             }
           }
-        }
-      )
+        )
+      } catch {
+        await self.handleStreamError(error)
+      }
     }
 
     // MARK: - HTTP Handling
@@ -255,6 +248,24 @@ import os.log
       continuation.resume(throwing: YouTubeKitError.remoteError(error.message))
     }
 
+    private func handleStreamError(_ error: Error) async {
+      let continuations = await continuationStore.takeAll()
+      guard !continuations.isEmpty else {
+        return
+      }
+
+      let resolvedError: Error
+      if let rpcError = error as? RPCError, rpcError.code == .deadlineExceeded {
+        resolvedError = YouTubeKitError.extractTimeout
+      } else {
+        resolvedError = error
+      }
+
+      for continuation in continuations {
+        continuation.resume(throwing: resolvedError)
+      }
+    }
+
     private func sendMessage(_ message: Ytdlp_V1_ClientMessage) {
       outboundContinuation.yield(message)
     }
@@ -270,6 +281,12 @@ import os.log
 
     func take(for taskID: String) -> CheckedContinuation<[RemoteStream], Error>? {
       storage.removeValue(forKey: taskID)
+    }
+
+    func takeAll() -> [CheckedContinuation<[RemoteStream], Error>] {
+      let continuations = Array(storage.values)
+      storage.removeAll()
+      return continuations
     }
   }
 

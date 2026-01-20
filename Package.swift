@@ -36,6 +36,7 @@ let package = Package(
             resources: [.process("Resources")]),
         .testTarget(
             name: "YouTubeKitTests",
-            dependencies: ["YouTubeKit"]),
+      dependencies: ["YouTubeKit"],
+      resources: [.process("testdata")])
     ]
 )

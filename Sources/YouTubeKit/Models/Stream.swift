@@ -69,32 +69,61 @@ public struct Stream: Sendable {
         self.averageBitrate = format.averageBitrate
         self.filesize = format.contentLength.flatMap { Int($0) }
     }
-    
-    init(remoteStream: RemoteStream) throws {
-        guard let itag = ITag(remoteStream.itag) else {
+
+  init(
+    url: URL,
+    itagValue: Int,
+    videoCodecName: String?,
+    audioCodecName: String?,
+    fileExtension ext: String,
+    averageBitrate: Int?,
+    audioBitrate: Int?,
+    videoBitrate: Int?,
+    filesize: Int?
+  ) throws {
+    guard let itag = ITag(itagValue) else {
             throw YouTubeKitError.extractError
         }
-        
-        self.url = remoteStream.url
-        self.itag = itag
-        self.videoCodec = remoteStream.videoCodec.map { VideoCodec(rawValue: $0) }
-        self.audioCodec = remoteStream.audioCodec.map { AudioCodec(rawValue: $0) }
-        
-        if self.videoCodec == nil && self.audioCodec == nil {
+
+    self.url = url
+    self.itag = itag
+
+    let videoCodec = videoCodecName.map { VideoCodec(rawValue: $0) }
+    let audioCodec = audioCodecName.map { AudioCodec(rawValue: $0) }
+
+    if videoCodec == nil && audioCodec == nil {
             throw YouTubeKitError.extractError
         }
-        
-        self.fileExtension = FileExtension(rawValue: remoteStream.ext) ?? .unknown
-        
-        self.bitrate = remoteStream.videoBitrate ?? remoteStream.audioBitrate
-        self.averageBitrate = remoteStream.averageBitrate
-        self.filesize = remoteStream.filesize
-        
+
+    self.videoCodec = videoCodec
+    self.audioCodec = audioCodec
+    self.fileExtension = FileExtension(rawValue: ext) ?? .unknown
+
+    let normalizedVideoBitrate = videoBitrate.flatMap { $0 > 0 ? $0 : nil }
+    let normalizedAudioBitrate = audioBitrate.flatMap { $0 > 0 ? $0 : nil }
+    self.bitrate = normalizedVideoBitrate ?? normalizedAudioBitrate
+    self.averageBitrate = averageBitrate
+    self.filesize = filesize
+
         // Backward compatibility for deprecated `subtype` and `mimeType`
-        self.type = (remoteStream.videoCodec != nil) ? "video" : "audio"
+    self.type = (videoCodec != nil) ? "video" : "audio"
         self.subtype = ""
         self.mimeType = ""
     }
+
+  init(remoteStream: RemoteStream) throws {
+    try self.init(
+      url: remoteStream.url,
+      itagValue: remoteStream.itag,
+      videoCodecName: remoteStream.videoCodec,
+      audioCodecName: remoteStream.audioCodec,
+      fileExtension: remoteStream.ext,
+      averageBitrate: remoteStream.averageBitrate,
+      audioBitrate: remoteStream.audioBitrate,
+      videoBitrate: remoteStream.videoBitrate,
+      filesize: remoteStream.filesize
+    )
+  }
     
     /// whether the stream is DASH
     public var isAdaptive: Bool {

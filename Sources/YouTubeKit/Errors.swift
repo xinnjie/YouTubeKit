@@ -21,6 +21,7 @@ public enum YouTubeKitError: Error, Equatable {
     case membersOnly
     case videoRegionBlocked
   case remoteError(String)
+  case unauthenticated(String)
 }
 
 extension YouTubeKitError: LocalizedError {
@@ -47,6 +48,9 @@ extension YouTubeKitError: LocalizedError {
 
     case .remoteError(let message):
       return NSLocalizedString("Remote error: \(message)", comment: "")
+
+    case .unauthenticated(let message):
+      return NSLocalizedString("Authentication required: \(message)", comment: "")
 
         default: return nil
         }

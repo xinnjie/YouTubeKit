@@ -324,8 +324,8 @@ public class YouTube {
                 clientRun.cancel()
               }
               let client = ReverseExecutorClient(grpcClient: grpcClient)
-              let remoteStreams = try await client.extract(videoID: videoID)
-              return remoteStreams.compactMap { try? Stream(remoteStream: $0) }
+              let streams = try await client.extract(videoID: videoID)
+              return streams
             } else {
               throw YouTubeKitError.remoteError("Reverse Executor requires newer OS versions")
             }

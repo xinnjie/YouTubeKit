@@ -21,6 +21,7 @@ import os.log
     private let client: Client
     private let deviceID: String
     private let userAgent: String
+    private let cookies: [YouTube.Cookie]
     private let outboundStream: AsyncStream<Ytdlp_V1_ClientMessage>
     private let outboundContinuation: AsyncStream<Ytdlp_V1_ClientMessage>.Continuation
     private let continuationStore = ContinuationStore()
@@ -31,11 +32,13 @@ import os.log
       client: Client,
       deviceID: String = UUID().uuidString,
       userAgent: String =
-        "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1"
+        "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1",
+      cookies: [YouTube.Cookie] = []
     ) {
       self.id = UUID()
       self.deviceID = deviceID
       self.userAgent = userAgent
+      self.cookies = cookies
       self.client = client
 
       let stream = AsyncStream<Ytdlp_V1_ClientMessage>.makeStream()
@@ -47,12 +50,14 @@ import os.log
       grpcClient: GRPCClient<Transport>,
       deviceID: String = UUID().uuidString,
       userAgent: String =
-        "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1"
+        "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1",
+      cookies: [YouTube.Cookie] = []
     ) where Client == Ytdlp_V1_ReverseExecutor.Client<Transport> {
       self.init(
         client: Ytdlp_V1_ReverseExecutor.Client(wrapping: grpcClient),
         deviceID: deviceID,
-        userAgent: userAgent
+        userAgent: userAgent,
+        cookies: cookies
       )
     }
 
@@ -77,8 +82,8 @@ import os.log
 
           let hello = Ytdlp_V1_Hello.with {
             $0.deviceID = self.deviceID
-            // $0.userAgent = self.userAgent
-            // $0.cookies = ... // TODO: Inject cookies if needed
+            $0.userAgent = self.userAgent
+            $0.cookies = self.cookies.map { $0.toProto() }
             $0.capabilities = ["http_chunking": "true"]
           }
           self.sendMessage(Ytdlp_V1_ClientMessage.with { $0.hello = hello })

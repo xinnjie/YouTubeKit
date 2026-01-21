@@ -298,7 +298,7 @@ public class YouTube {
                     
                     return remoteStreams.compactMap { try? Stream(remoteStream: $0) }
                     
-        case .remoteReverseExecutor(let serverURL):
+        case .remoteReverseExecutor(let serverURL, let cookies):
           #if canImport(YTDLPAPI)
             guard let host = serverURL.host, let port = serverURL.port else {
               throw YouTubeKitError.remoteError(
@@ -323,7 +323,7 @@ public class YouTube {
               defer {
                 clientRun.cancel()
               }
-              let client = ReverseExecutorClient(grpcClient: grpcClient)
+              let client = ReverseExecutorClient(grpcClient: grpcClient, cookies: cookies)
               let streams = try await client.extract(videoID: videoID)
               return streams
             } else {
@@ -384,12 +384,8 @@ public class YouTube {
             
             // try extracting video infos from watch html directly as well
             let watchVideoInfoTask = Task<InnerTube.VideoInfo?, Never> { [log] in
-                do {
-                    return nil //try await Extraction.getVideoInfo(fromHTML: watchHTML)  // (temporarily disabled)
-                } catch let error {
-                    os_log("Couldn't extract video info from main watch html: %{public}@", log: log, type: .debug, error.localizedDescription)
-                    return nil
-                }
+        // try await Extraction.getVideoInfo(fromHTML: watchHTML)  // (temporarily disabled)
+        return nil
             }
 
             let signatureTimestamp = try await signatureTimestamp

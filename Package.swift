@@ -17,7 +17,7 @@ let package = Package(
     dependencies: [
         // Dependencies declare other packages that this package depends on.
         // .package(url: /* package url */, from: "1.0.0"),
-    .package(name: "YTDLPAPI", path: "/Users/xinnjie/Dev/watchbeats/protogen/swift2gen/ytdlp/v1"),
+    .package(path: "../../protogen/swift2gen"),
     .package(url: "https://github.com/grpc/grpc-swift-2.git", from: "2.0.0"),
     .package(url: "https://github.com/grpc/grpc-swift-protobuf.git", from: "2.0.0"),
     .package(url: "https://github.com/grpc/grpc-swift-nio-transport.git", from: "2.0.0"),
@@ -29,7 +29,7 @@ let package = Package(
         .target(
             name: "YouTubeKit",
       dependencies: [
-        .product(name: "YTDLPAPI", package: "YTDLPAPI"),
+        .product(name: "YTDLPAPI", package: "Swift2Gen"),
         .product(name: "GRPCCore", package: "grpc-swift-2"),
         .product(name: "GRPCProtobuf", package: "grpc-swift-protobuf"),
         .product(name: "GRPCNIOTransportHTTP2", package: "grpc-swift-nio-transport"),

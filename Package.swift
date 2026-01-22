@@ -17,7 +17,7 @@ let package = Package(
     dependencies: [
         // Dependencies declare other packages that this package depends on.
         // .package(url: /* package url */, from: "1.0.0"),
-    .package(path: "../../protogen/swift2gen"),
+    .package(url: "https://github.com/xinnjie/swift2gen.git", branch: "main"),
     .package(url: "https://github.com/grpc/grpc-swift-2.git", from: "2.0.0"),
     .package(url: "https://github.com/grpc/grpc-swift-protobuf.git", from: "2.0.0"),
     .package(url: "https://github.com/grpc/grpc-swift-nio-transport.git", from: "2.0.0"),

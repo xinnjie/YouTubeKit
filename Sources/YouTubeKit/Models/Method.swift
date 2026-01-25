@@ -15,6 +15,8 @@ extension YouTube {
         case local
 #endif
         case remote(serverURL: URL)
+    /// Uses the Reverse Executor service, all extraction is done on the server while traffic is routed through the app
+    case remoteReverseExecutor(serverURL: URL, cookies: [YouTube.Cookie] = [])
         
         public static var remote: ExtractionMethod {
             return .remote(serverURL: URL(string: "https://remote-production.youtubekit.dev")!)

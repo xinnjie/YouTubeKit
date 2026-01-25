@@ -7,10 +7,11 @@
 
 import Foundation
 
-public enum YouTubeKitError: String, Error {
+public enum YouTubeKitError: Error, Equatable {
     case maxRetriesExceeded
     case htmlParseError
     case extractError
+  case extractTimeout
     case regexMatchError
     case videoUnavailable
     case videoAgeRestricted
@@ -19,6 +20,8 @@ public enum YouTubeKitError: String, Error {
     case recordingUnavailable
     case membersOnly
     case videoRegionBlocked
+  case remoteError(String)
+  case unauthenticated(String)
 }
 
 extension YouTubeKitError: LocalizedError {
@@ -34,11 +37,20 @@ extension YouTubeKitError: LocalizedError {
         case .liveStreamError:
             return NSLocalizedString("Can't extract video from livestream", comment: "")
 
+    case .extractTimeout:
+      return NSLocalizedString("Extract timed out", comment: "")
+
         case .videoPrivate:
             return NSLocalizedString("Video is private", comment: "")
 
         case .membersOnly:
             return NSLocalizedString("Video is members only", comment: "")
+
+    case .remoteError(let message):
+      return NSLocalizedString("Remote error: \(message)", comment: "")
+
+    case .unauthenticated(let message):
+      return NSLocalizedString("Authentication required: \(message)", comment: "")
 
         default: return nil
         }

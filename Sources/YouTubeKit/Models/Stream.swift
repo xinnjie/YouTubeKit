@@ -30,6 +30,7 @@ public struct Stream: Sendable {
     public let subtype: String
     
   public let filesize: Int?
+  public let formatNote: String?
     
     init(format: InnerTube.StreamingData.Format) throws {
         guard let url = format.url.flatMap({ URL(string: $0) }),
@@ -68,6 +69,7 @@ public struct Stream: Sendable {
         self.bitrate = format.bitrate
         self.averageBitrate = format.averageBitrate
         self.filesize = format.contentLength.flatMap { Int($0) }
+    self.formatNote = nil
     }
 
   init(remoteStream: RemoteStream) throws {
@@ -93,7 +95,8 @@ public struct Stream: Sendable {
     averageBitrate: Int?,
     audioBitrate: Int?,
     videoBitrate: Int?,
-    filesize: Int?
+    filesize: Int?,
+    formatNote: String? = nil
   ) throws {
     guard let itag = ITag(itagValue) else {
             throw YouTubeKitError.extractError
@@ -118,6 +121,7 @@ public struct Stream: Sendable {
     self.bitrate = normalizedVideoBitrate ?? normalizedAudioBitrate
     self.averageBitrate = averageBitrate
     self.filesize = filesize
+    self.formatNote = formatNote
 
         // Backward compatibility for deprecated `subtype` and `mimeType`
     self.type = (videoCodec != nil) ? "video" : "audio"

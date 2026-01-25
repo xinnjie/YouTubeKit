@@ -229,7 +229,9 @@ import os.log
 
       return info.formats.compactMap { format in
         guard let url = URL(string: format.url),
-          let itagValue = Self.itagValue(from: format.formatID)
+          let itagValue = Self.itagValue(from: format.formatID),
+          // TODO(xinnjie): curently only support https, support HLS in the future
+          format.protocolField == "https"
         else {
           return nil
         }
@@ -243,7 +245,8 @@ import os.log
           averageBitrate: format.tbr.map { Int($0 * 1000) },
           audioBitrate: format.abr.map { Int($0 * 1000) },
           videoBitrate: format.vbr.map { Int($0 * 1000) },
-          filesize: format.filesize
+          filesize: format.filesize,
+          formatNote: format.formatNote
         )
       }
     }

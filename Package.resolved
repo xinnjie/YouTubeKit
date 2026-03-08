@@ -206,15 +206,6 @@
         "revision" : "7c6ad0fc39d0763e0b699210e4124afd5041c5df",
         "version" : "1.6.4"
       }
-    },
-    {
-      "identity" : "swift2gen",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/xinnjie/swift2gen.git",
-      "state" : {
-        "branch" : "main",
-        "revision" : "5ac1900720cd4e3b1220ba9c833c89a2ec76c2ee"
-      }
     }
   ],
   "version" : 2
